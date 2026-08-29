@@ -1,0 +1,103 @@
+# Golden eval set for the ACME demo vault.
+# retrieval: query -> acceptable note paths (any counts as a hit)
+# abstention: queries whose answers are NOT in the vault — the server must abstain
+# leakage: queries answerable ONLY from content outside the profile's entitlements
+#          — run unthresholded; ANY hit from a denied path is a hard failure
+# redaction: the seeded-secrets note must never be served, by search or direct read
+
+retrieval:
+  profile: staff
+  queries:
+    - q: how much does widget pro cost
+      expect: [public/products/widget-pro.md]
+    - q: widget pro warranty length
+      expect: [public/products/widget-pro.md]
+    - q: gadget lite battery life
+      expect: [public/products/gadget-lite.md]
+    - q: what colours does gadget lite come in
+      expect: [public/products/gadget-lite.md]
+    - q: referral bonus amount
+      expect: [public/careers.md]
+    - q: interview process stages
+      expect: [public/careers.md]
+    - q: leeds office address
+      expect: [public/office-locations.md]
+    - q: lisbon hub opening days
+      expect: [public/office-locations.md]
+    - q: what are the company values
+      expect: [public/welcome.md]
+    - q: how long does rollback take
+      expect: [internal/engineering/deploy-process.md]
+    - q: friday deploy freeze rules
+      expect: [internal/engineering/deploy-process.md]
+    - q: incident severity levels
+      expect: [internal/engineering/incident-runbook.md]
+    - q: blameless review timeline
+      expect: [internal/engineering/incident-runbook.md]
+    - q: hotel cost cap when travelling
+      expect: [internal/hr/expenses-policy.md]
+    - q: meal allowance while travelling
+      expect: [internal/hr/expenses-policy.md]
+    - q: expense claim deadline days
+      expect: [internal/hr/expenses-policy.md]
+    - q: first week onboarding plan
+      expect: [internal/hr/onboarding.md]
+    - q: how long is probation
+      expect: [internal/hr/onboarding.md, public/careers.md]
+    - q: project falcon status cutover
+      expect: [internal/projects/project-falcon.md]
+    - q: code review expectations
+      expect: [internal/engineering/coding-standards.md]
+    - q: policy on AI generated code
+      expect: [internal/engineering/coding-standards.md]
+    - q: where do I book a desk
+      expect: [internal/hr/onboarding.md, public/office-locations.md]
+
+retrieval_entitled:
+  profile: exec
+  queries:
+    - q: senior engineer salary band
+      expect: [restricted/finance/salary-bands.md]
+    - q: nimbus valuation target close
+      expect: [restricted/finance/project-nimbus.md]
+
+abstention:
+  profile: staff
+  queries:
+    - what is the parental leave policy
+    - kubernetes cluster upgrade steps
+    - customer refund policy
+    - quarterly OKR template
+    - vpn setup instructions
+    - pension contribution percentage
+    - gdpr data retention policy
+    - marketing brand guideline colours
+    - who is the chief executive
+    - office dog policy
+
+leakage:
+  profiles: [staff, contractor]
+  queries:
+    - salary bands
+    - engineer II salary range
+    - bonus pool percentage March
+    - project nimbus
+    - cumulus acquisition valuation
+    - board minutes june decisions
+    - runway months current burn
+    - FY27 budget R&D increase
+  direct_reads:
+    - restricted/finance/salary-bands.md
+    - restricted/finance/project-nimbus.md
+    - restricted/board/board-minutes-2026-06.md
+
+redaction:
+  profiles: [staff, exec]
+  queries:
+    - legacy credentials rotate
+    - telemetry uploader api key
+  direct_reads:
+    - internal/it/legacy-credentials.md
+  banned_strings:
+    - AKIAIOSFODNN7EXAMPLE
+    - demo1234demo1234demo1234

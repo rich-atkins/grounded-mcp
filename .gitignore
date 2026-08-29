@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.idea/
+.vscode/
+.DS_Store
+
+# Local vault config — the private-instance boundary: real vault paths and
+# entitlement rules never enter the repo.
+grounded.local.yaml
+*.local.yaml
+
+# Index artefacts
+*.sqlite3
