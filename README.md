@@ -2,6 +2,8 @@
 
 **An MCP server for markdown knowledge vaults that ships with its own eval suite.**
 
+![grounded-mcp demo: cited search, structural abstention, index-level entitlements, and the eval gate going red when weakened](docs/demo.gif)
+
 Plenty of servers expose your notes over the [Model Context Protocol](https://modelcontextprotocol.io).
 Before you point an agent at a knowledge store, though, you need answers to three questions most of
 them skip:
