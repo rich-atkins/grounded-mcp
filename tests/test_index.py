@@ -66,3 +66,26 @@ def test_backlinks_within_entitlements(staff_index, exec_index):
     assert "restricted/board/board-minutes-2026-06.md" in exec_index.backlinks(
         "restricted/finance/project-nimbus.md"
     )
+
+
+def test_search_works_from_another_thread():
+    """The MCP SDK runs sync tool functions on worker threads; the index built
+    on the main thread must serve them. v0.1 shipped with sqlite3's same-thread
+    default, so EVERY DB-touching tool call failed over real MCP transport —
+    found by grounded-harness's bridge integration test, invisible to the
+    in-process eval suite. Regression: search from a worker thread."""
+    import threading
+    idx = VaultIndex(VAULT, ENTS.profile("staff"))
+    out: dict = {}
+
+    def worker():
+        try:
+            out["result"] = idx.search("widget pro pricing", k=2, min_score=1.0)
+        except Exception as e:  # pragma: no cover
+            out["error"] = e
+
+    t = threading.Thread(target=worker)
+    t.start()
+    t.join()
+    assert "error" not in out, out.get("error")
+    assert out["result"].hits[0].note_path.startswith("public/products/widget-pro.md")
