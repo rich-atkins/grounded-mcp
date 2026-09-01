@@ -1,0 +1,9 @@
+# Example token map for HTTP mode (GROUNDED_TOKENS=example-tokens.yaml).
+# Store sha256 hashes, never raw tokens: python -m grounded_mcp.authz <raw-token>
+tokens:
+  - sha256: "REPLACE-WITH-HASH"
+    client_id: analytics-team
+    profile: staff
+  - sha256: "REPLACE-WITH-HASH"
+    client_id: contractor-portal
+    profile: contractor
