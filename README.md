@@ -81,6 +81,9 @@ feature, not a missing feature.
 | `GROUNDED_MIN_SCORE` | `1.0` | abstention score threshold |
 | `GROUNDED_MIN_COVERAGE` | `0.5` | abstention term-coverage threshold |
 | `GROUNDED_SERVE_REDACTED` | `false` | serve notes containing secret patterns |
+| `GROUNDED_TRANSPORT` | `stdio` | `stdio` \| `http` (v0.2) |
+| `GROUNDED_TOKENS` | — | REQUIRED in http mode: yaml token map (sha256 → client/profile) |
+| `GROUNDED_HOST` / `GROUNDED_PORT` | `127.0.0.1` / `8000` | http bind address |
 
 Entitlements (`deny` wins, then `allow`, then default-deny):
 
@@ -103,18 +106,31 @@ note actually contains. Both gates together take abstention from **0.30 → 1.00
 retrieval loss. The eval suite is what made that tuning honest — full details in
 `evals/run_evals.py` and the scorecard baseline.
 
+## HTTP mode (v0.2): real per-client entitlements
+
+```bash
+python -m grounded_mcp.authz my-raw-token        # -> sha256 for the tokens file
+GROUNDED_TRANSPORT=http GROUNDED_TOKENS=tokens.yaml GROUNDED_VAULT=~/notes grounded-mcp
+```
+
+Each client's bearer token maps to an entitlements profile (see `example-tokens.yaml`);
+the server keeps one index per profile, so enforcement stays index-level per VERIFIED
+identity. Unknown token = 401, never a default. Empty token file = server refuses to
+start. Tested over the wire: two tokens against one live server get different vaults,
+and the leakage probe runs as a real client.
+
 ## Honest boundaries
 
-- **stdio = one user.** Over stdio, client and server run as the same user, so profiles here
-  demonstrate the *deployment pattern* rather than enforce against a hostile peer. Real
-  per-client entitlements arrive with the HTTP transport (v0.2). The enforcement machinery is
+- **stdio = one user.** Over stdio, client and server run as the same user, so profiles
+  demonstrate the *deployment pattern* rather than enforce against a hostile peer — for
+  real multi-client enforcement, use HTTP mode (above). The enforcement machinery is
   identical either way — index-level, not response-filtering.
 - **A denied note and a nonexistent note return the same response.** The server refuses to be
   an existence oracle for content outside your entitlements.
 - **The redaction patterns are high-precision, not exhaustive.** They catch key-shaped strings
   (AWS/GitHub/Slack tokens, private-key blocks, `api_key = "..."` assignments), not every secret.
 - **BM25 is the deliberate v0.1 baseline** — deterministic, dependency-free, measurable. Hybrid
-  semantic retrieval lands in v0.2 *with its eval delta published against this baseline*.
+  semantic retrieval lands in v0.3 *with its eval delta published against this baseline*.
 
 ## The demo vault
 
@@ -134,8 +150,8 @@ python evals/run_evals.py --write-baseline   # accept current scores after a del
 
 ## Roadmap
 
-- **v0.2** — streamable HTTP transport (2026-07-28 stateless spec) with per-client entitlement
-  profiles; hybrid semantic retrieval with the eval delta vs BM25 published.
+- **v0.2** ✅ shipped — streamable HTTP transport with per-client entitlements.
+- **v0.3** — hybrid semantic retrieval, landing only with its eval delta vs the BM25 baseline published.
 - Pluggable store backends (the vault interface is small); community adapters welcome.
 
 MIT © Richard Atkins
