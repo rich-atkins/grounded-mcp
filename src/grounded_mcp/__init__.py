@@ -7,4 +7,4 @@ Three guardrails, all proven by the shipped eval suite:
     cannot leak through scores, snippets, or rankings
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

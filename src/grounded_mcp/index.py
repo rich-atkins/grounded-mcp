@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -91,7 +92,14 @@ class VaultIndex:
         self.vault_root = vault_root
         self.profile = profile
         self.serve_redacted = serve_redacted
-        self._db = sqlite3.connect(":memory:")
+        # check_same_thread=False + a lock: the MCP SDK executes sync tool
+        # functions on worker threads, so the connection built at server start
+        # must be usable from them. The lock serialises access (found by the
+        # grounded-harness bridge integration test — the in-process eval suite
+        # never crossed a thread, so v0.1 shipped with every DB-touching tool
+        # broken over real MCP transport).
+        self._db = sqlite3.connect(":memory:", check_same_thread=False)
+        self._db_lock = threading.Lock()
         self._mtimes: dict[str, float] = {}
         self.notes: dict[str, Note] = {}
         self.redacted_paths: set[str] = set()
@@ -100,6 +108,10 @@ class VaultIndex:
     # -- build ---------------------------------------------------------------
 
     def _build(self) -> None:
+        with self._db_lock:
+            self._build_locked()
+
+    def _build_locked(self) -> None:
         db = self._db
         db.execute("DROP TABLE IF EXISTS sections")
         db.execute(
@@ -200,17 +212,18 @@ class VaultIndex:
         give abstention its teeth.
         """
         self.refresh()
-        rows = self._db.execute(
-            f"""
-            SELECT citation_id, note_path, heading, title,
-                   bm25(sections, 0, 0, {_W_HEADING}, {_W_TITLE}, {_W_TAGS}, {_W_TEXT}) AS rank,
-                   snippet(sections, 5, '>>', '<<', ' … ', 12),
-                   start_line, end_line
-            FROM sections WHERE sections MATCH ?
-            ORDER BY rank LIMIT ?
-            """,
-            (_fts_query(query), max(k, 1)),
-        ).fetchall()
+        with self._db_lock:
+            rows = self._db.execute(
+                f"""
+                SELECT citation_id, note_path, heading, title,
+                       bm25(sections, 0, 0, {_W_HEADING}, {_W_TITLE}, {_W_TAGS}, {_W_TEXT}) AS rank,
+                       snippet(sections, 5, '>>', '<<', ' … ', 12),
+                       start_line, end_line
+                FROM sections WHERE sections MATCH ?
+                ORDER BY rank LIMIT ?
+                """,
+                (_fts_query(query), max(k, 1)),
+            ).fetchall()
 
         terms = _content_terms(query)
         hits = [
