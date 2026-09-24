@@ -69,15 +69,33 @@ print(json.dumps({"hits_from_restricted": leaks, "note": "never indexed for this
 EOF
 sleep 1.6
 
-say "4. none of that is a claim - it's a CI gate. Green build:"
-type_cmd "python evals/run_evals.py"
-$PY evals/run_evals.py | head -10
+say "4. superseded notes are NEVER retrievable, but still readable by path (v0.3)"
+type_cmd "grounded-mcp demo: search 'meal allowance while travelling' + read_note the 2025 policy"
+$PY - <<'EOF'
+import json, sys
+sys.path.insert(0, "src")
+from grounded_mcp.entitlements import Entitlements
+from grounded_mcp.index import VaultIndex
+from pathlib import Path
+V = Path("demo_vault")
+idx = VaultIndex(V, Entitlements.load(V / "entitlements.yaml").profile("staff"))
+r = idx.search("meal allowance while travelling", k=5, min_score=0.0, min_coverage=0.0)
+print(json.dumps({"hits": [h.note_path for h in r.hits][:3],
+                  "stale_2025_note_in_results": any("2025" in h.note_path for h in r.hits)}, indent=2))
+n = idx.get_note("internal/hr/expenses-policy-2025.md")
+print(json.dumps({"read_note": n.path, "superseded": n.superseded, "superseded_by": n.superseded_by}, indent=2))
+EOF
 sleep 1.8
 
-say "5. weaken the abstention gates -> the build FAILS"
+say "5. none of that is a claim - it's a CI gate, reported BY SLICE. Green build:"
+type_cmd "python evals/run_evals.py"
+$PY evals/run_evals.py | head -10
+sleep 2.0
+
+say "6. weaken the abstention gates -> the build FAILS, and names the slice"
 type_cmd "GROUNDED_MIN_SCORE=0 GROUNDED_MIN_COVERAGE=0 python evals/run_evals.py"
 set +e
-GROUNDED_MIN_SCORE=0 GROUNDED_MIN_COVERAGE=0 $PY evals/run_evals.py | tail -6
+GROUNDED_MIN_SCORE=0 GROUNDED_MIN_COVERAGE=0 $PY evals/run_evals.py | sed -n '4,8p;/^EVAL GATE/,$p'
 echo "exit code: 1"
 set -e
 sleep 2.2
