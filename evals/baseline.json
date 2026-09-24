@@ -1,30 +1,73 @@
 {
+  "schema": 2,
   "min_score": 1.0,
-  "retrieval": {
-    "n": 22,
-    "hit_at_1": 1.0,
-    "recall_at_5": 1.0,
-    "mrr": 1.0,
-    "failures": []
-  },
-  "retrieval_entitled": {
-    "n": 2,
-    "hit_at_1": 1.0,
-    "recall_at_5": 1.0,
-    "mrr": 1.0,
-    "failures": []
-  },
-  "abstention": {
-    "n": 10,
-    "abstention_rate": 1.0,
-    "failures": []
-  },
-  "leakage": {
-    "leaks": [],
-    "leak_count": 0
-  },
-  "redaction": {
-    "violations": [],
-    "violation_count": 0
+  "min_coverage": 0.5,
+  "slices": {
+    "answerable": {
+      "n": 24,
+      "pass": 24,
+      "fail": 0,
+      "miss": 0,
+      "false_abstain": 0,
+      "profiles": {
+        "staff": {
+          "n": 22,
+          "hit_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "mrr": 1.0
+        },
+        "exec": {
+          "n": 2,
+          "hit_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "failures": [],
+      "hit_at_1": 1.0,
+      "recall_at_5": 1.0,
+      "mrr": 1.0
+    },
+    "unsupported": {
+      "n": 10,
+      "pass": 10,
+      "fail": 0,
+      "false_answer": 0,
+      "failures": [],
+      "abstention_rate": 1.0
+    },
+    "superseded": {
+      "n": 16,
+      "pass": 16,
+      "fail": 0,
+      "stale_cited": 0,
+      "current_hit": 12,
+      "current_missed": 0,
+      "pointer_missing": 0,
+      "reads": 4,
+      "failures": []
+    },
+    "denied": {
+      "n": 24,
+      "pass": 24,
+      "fail": 0,
+      "leaks": 0,
+      "profiles": [
+        "staff",
+        "contractor"
+      ],
+      "failures": []
+    },
+    "secret": {
+      "n": 6,
+      "pass": 6,
+      "fail": 0,
+      "violations": 0,
+      "profiles": [
+        "staff",
+        "exec"
+      ],
+      "failures": []
+    }
   }
 }

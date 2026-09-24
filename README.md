@@ -5,7 +5,7 @@
 ![grounded-mcp demo: cited search, structural abstention, index-level entitlements, and the eval gate going red when weakened](docs/demo.gif)
 
 Plenty of servers expose your notes over the [Model Context Protocol](https://modelcontextprotocol.io).
-Before you point an agent at a knowledge store, though, you need answers to three questions most of
+Before you point an agent at a knowledge store, though, you need answers to four questions most of
 them skip:
 
 1. **Can I trust what it returns?** Every content-bearing response carries a stable
@@ -16,14 +16,21 @@ them skip:
    content a profile can't see is never indexed for it, so it can't leak through scores,
    snippets, or rankings. A **redaction guard** refuses to serve notes that look like they
    contain credentials, regardless of entitlements.
+4. **Is it still true?** A note marked `superseded_by: <path>` is **never searchable** and is
+   read back flagged with its successor. "No longer true" is a different failure from "no
+   answer" and "no access", and the suite counts it separately (v0.3).
 
-And none of that is a claim — it's a **CI-gated scorecard** run against the committed demo vault:
+And none of that is a claim — it's a **CI-gated scorecard** run against the committed demo vault,
+reported **by slice** (each slice is one kind of failure; the case count sits next to pass/fail
+so nothing hides inside an aggregate):
 
 ```
-retrieval   (staff, n=22):  hit@1 1.00   recall@5 1.00   MRR 1.00
-abstention  (n=10):         rate  1.00   (target 1.00)
-leakage     : 0 (must be 0)
-redaction   : 0 (must be 0)
+slice          n  pass  fail   detail
+answerable    24    24     0   hit@1 1.00  recall@5 1.00  MRR 1.00  miss 0  false-abstain 0
+unsupported   10    10     0   abstention 1.00  false-answer 0
+superseded    16    16     0   stale-cited 0 (must be 0)  current-hit 12/12  history-readable 4/4
+denied        24    24     0   leaks 0 (must be 0)
+secret         6     6     0   violations 0 (must be 0)
 EVAL GATE: PASS
 ```
 
@@ -64,9 +71,9 @@ GROUNDED_VAULT=~/notes GROUNDED_PROFILE=default grounded-mcp
 | Tool | What it does |
 |---|---|
 | `search(query, k)` | BM25 over titles/headings/tags/body. Cited hits — or an explicit abstention with the scores that failed the bar. |
-| `read_note(citation, section_only)` | A note or single section by citation id; every block carries its own citation anchor. |
+| `read_note(citation, section_only)` | A note or single section by citation id; every block carries its own citation anchor. A superseded note comes back with `superseded: true`, `superseded_by` and a warning. |
 | `backlinks(path)` | Wikilink graph: what links here, within your entitlements. |
-| `browse(prefix, tag)` | List visible notes by folder/tag. |
+| `browse(prefix, tag, include_superseded)` | List visible *current* notes by folder/tag; superseded ones only on request, each with its successor path. |
 
 Read-only **by design** — a server that can quote your vault but never rewrite it is a trust
 feature, not a missing feature.
@@ -106,6 +113,31 @@ note actually contains. Both gates together take abstention from **0.30 → 1.00
 retrieval loss. The eval suite is what made that tuning honest — full details in
 `evals/run_evals.py` and the scorecard baseline.
 
+## Why supersession is structural, not a ranking rule (a measured finding, v0.3)
+
+Real vaults keep old versions: last year's expenses policy next to this year's, an archived
+datasheet, a superseded deploy runbook. Mark the old one in its frontmatter:
+
+```yaml
+---
+title: Expenses Policy
+superseded_by: internal/hr/expenses-policy.md
+---
+```
+
+and it is excluded from the search index at build time — the same mechanism as entitlements,
+so it can never be scored, ranked or cited — while `read_note` still returns it by path,
+flagged, so history stays reachable on purpose and never by accident.
+
+Why exclusion rather than a recency boost: measured before this existed, with four stale notes
+placed beside their successors, the stale copy **tied its successor on BM25 score in 7 of 12
+queries, tied on coverage in 11 of 12, ranked first in 8 of 12 and was cited in 12 of 12**.
+Where scores tied the stale note won every time, because `-2025.md` sorts before `.md`.
+Both abstention gates passed it in 12 of 12: a stale note *is* relevant, it is just no longer
+true, and no relevance signal can see that. The v0.2 scorecard reported the damage as a
+ranking regression in retrieval and named the wrong cause. v0.3 gives "no longer true" its
+own slice, with a hard zero.
+
 ## HTTP mode (v0.2): real per-client entitlements
 
 ```bash
@@ -129,14 +161,19 @@ and the leakage probe runs as a real client.
   an existence oracle for content outside your entitlements.
 - **The redaction patterns are high-precision, not exhaustive.** They catch key-shaped strings
   (AWS/GitHub/Slack tokens, private-key blocks, `api_key = "..."` assignments), not every secret.
+- **Supersession is declared, not detected.** The server trusts `superseded_by` in frontmatter;
+  it does not guess that two similar notes are versions of each other. A stale note nobody
+  marked is still served — the eval slice exists so you can measure how many you have.
 - **BM25 is the deliberate v0.1 baseline** — deterministic, dependency-free, measurable. Hybrid
-  semantic retrieval lands in v0.3 *with its eval delta published against this baseline*.
+  semantic retrieval lands in v0.4 *with its eval delta published, per slice, against this baseline*.
 
 ## The demo vault
 
 A fictional company handbook ("ACME Ltd") with three zones — `public/`, `internal/`,
 `restricted/` — plus one deliberately seeded fake-credentials note (the classic AWS
-documentation example key) that the redaction guard must refuse to serve. All content is
+documentation example key) that the redaction guard must refuse to serve, and four
+`*-2025.md` notes marked `superseded_by` their current versions so the superseded slice has
+something real-shaped to fail on. All content is
 synthetic; the vault exists so the eval suite has something real-shaped to prove things against.
 
 ## Development
@@ -151,7 +188,8 @@ python evals/run_evals.py --write-baseline   # accept current scores after a del
 ## Roadmap
 
 - **v0.2** ✅ shipped — streamable HTTP transport with per-client entitlements.
-- **v0.3** — hybrid semantic retrieval, landing only with its eval delta vs the BM25 baseline published.
+- **v0.3** ✅ shipped — supersession (`superseded_by`) enforced at index build, plus the slice-aware scorecard (answerable / unsupported / superseded / denied / secret, n next to pass/fail, false abstention split from misses).
+- **v0.4** — hybrid semantic retrieval, landing only with its eval delta vs the BM25 baseline published *per slice*.
 - Pluggable store backends (the vault interface is small); community adapters welcome.
 
 MIT © Richard Atkins

@@ -52,6 +52,11 @@ class Note:
     links: list[str] = field(default_factory=list)   # wikilink targets (note names)
     sections: list[Section] = field(default_factory=list)
     mtime: float = 0.0
+    superseded_by: str | None = None   # vault-relative path of the current version, if this note is stale
+
+    @property
+    def superseded(self) -> bool:
+        return self.superseded_by is not None
 
     @property
     def body(self) -> str:
@@ -75,6 +80,20 @@ def _split_frontmatter(raw: str) -> tuple[dict, str, int]:
             offset = raw[: rest_start + 1].count("\n") if rest_start != -1 else raw.count("\n")
             return fm, rest, offset
     return {}, raw, 0
+
+
+def _superseded_by(fm: dict) -> str | None:
+    """The ``superseded_by`` frontmatter key, normalised to a vault-relative posix path.
+
+    A note that names a successor is *stale*: still readable on purpose (history
+    is not deleted), never retrievable by accident (see index.py). Only a
+    non-empty string counts; ``superseded_by: true`` or a list is ignored, because
+    a stale note must say WHAT replaced it or the pointer is worthless to a reader.
+    """
+    v = fm.get("superseded_by")
+    if isinstance(v, str) and v.strip():
+        return v.strip().replace("\\", "/").lstrip("./")
+    return None
 
 
 def parse_note(vault_root: Path, file_path: Path) -> Note:
@@ -117,6 +136,7 @@ def parse_note(vault_root: Path, file_path: Path) -> Note:
         tags.add(m.group(1))
 
     title = str(fm.get("title") or "").strip() or file_path.stem
+    superseded_by = _superseded_by(fm)
 
     return Note(
         path=rel,
@@ -126,6 +146,7 @@ def parse_note(vault_root: Path, file_path: Path) -> Note:
         links=sorted({m.group(1).strip() for m in WIKILINK_RE.finditer(body)}),
         sections=sections,
         mtime=file_path.stat().st_mtime,
+        superseded_by=superseded_by,
     )
 
 

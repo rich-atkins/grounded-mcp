@@ -6,6 +6,9 @@ Design invariants:
   * a denied note and a nonexistent note produce the SAME response — the
     server must not act as an existence oracle for content you can't see
   * read-only by design: no write tools in v1 (that's a trust feature)
+  * superseded notes (frontmatter ``superseded_by``) are never searchable and
+    are read back flagged — "no longer true" is a distinct failure mode from
+    "no answer" and "no access", and the eval suite counts it separately (v0.3)
 
 v0.2 adds HTTP mode with per-client entitlements: over streamable HTTP each
 request's profile is resolved from its VERIFIED bearer token (an unknown token
@@ -106,7 +109,9 @@ def build_server(config: Config | None = None) -> MCPServer:
             "citation id (path#heading) — quote it when using the content. When "
             "search returns abstained=true, the vault has no adequate answer: say "
             "so rather than guessing. Some content may be outside your entitlements; "
-            "absence of a note is not evidence it doesn't exist."
+            "absence of a note is not evidence it doesn't exist. Superseded notes "
+            "are never returned by search; if read_note says superseded=true, read "
+            "the successor and do not cite the stale one as current."
         ),
         **server_kwargs,
     )
@@ -156,22 +161,31 @@ def build_server(config: Config | None = None) -> MCPServer:
             sections = [s for s in sections if slugify(s.heading) == slug]
             if not sections:
                 return dict(_NOT_AVAILABLE)
-        return {
+        out = {
             "found": True,
             "path": note.path,
             "title": note.title,
             "tags": note.tags,
             "frontmatter": {k: v for k, v in note.frontmatter.items() if k != "tags"},
-            "sections": [
-                {
-                    "citation_id": s.citation_id,
-                    "heading": s.heading or None,
-                    "lines": [s.start_line, s.end_line],
-                    "text": s.text,
-                }
-                for s in sections
-            ],
         }
+        if note.superseded:
+            # Reachable by path on purpose, never by search. Say so loudly:
+            # an agent that reads history must know it is reading history.
+            out["superseded"] = True
+            out["superseded_by"] = note.superseded_by
+            out["warning"] = (
+                f"this note is superseded by {note.superseded_by}; do not cite it "
+                f"as current — read the successor instead")
+        out["sections"] = [
+            {
+                "citation_id": s.citation_id,
+                "heading": s.heading or None,
+                "lines": [s.start_line, s.end_line],
+                "text": s.text,
+            }
+            for s in sections
+        ]
+        return out
 
     @mcp.tool()
     def backlinks(path: str) -> dict:
@@ -188,20 +202,28 @@ def build_server(config: Config | None = None) -> MCPServer:
         }
 
     @mcp.tool()
-    def browse(prefix: str = "", tag: str = "") -> dict:
-        """List notes visible under your entitlements, optionally filtered by
-        path prefix and/or tag."""
+    def browse(prefix: str = "", tag: str = "", include_superseded: bool = False) -> dict:
+        """List CURRENT notes visible under your entitlements, optionally
+        filtered by path prefix and/or tag. Superseded notes are listed only
+        with include_superseded=True, each carrying its successor path."""
         idx = _index()
+        pool = list(idx.notes.values())
+        if include_superseded:
+            pool += list(idx.superseded.values())
         notes = [
-            n for n in idx.notes.values()
+            n for n in pool
             if n.path.startswith(prefix) and (not tag or tag.lstrip("#") in n.tags)
         ]
+
+        def row(n):
+            r = {"path": n.path, "title": n.title, "tags": n.tags}
+            if n.superseded:
+                r["superseded_by"] = n.superseded_by
+            return r
+
         return {
             "count": len(notes),
-            "notes": [
-                {"path": n.path, "title": n.title, "tags": n.tags}
-                for n in sorted(notes, key=lambda n: n.path)
-            ],
+            "notes": [row(n) for n in sorted(notes, key=lambda n: n.path)],
         }
 
     return mcp

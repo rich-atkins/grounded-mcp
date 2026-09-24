@@ -102,6 +102,7 @@ class VaultIndex:
         self._db_lock = threading.Lock()
         self._mtimes: dict[str, float] = {}
         self.notes: dict[str, Note] = {}
+        self.superseded: dict[str, Note] = {}   # stale notes: readable, never retrievable
         self.redacted_paths: set[str] = set()
         self._build()
 
@@ -123,7 +124,7 @@ class VaultIndex:
             )
             """
         )
-        self.notes, self.redacted_paths = {}, set()
+        self.notes, self.superseded, self.redacted_paths = {}, {}, set()
         all_notes = load_vault(self.vault_root)
         self._mtimes = {n.path: n.mtime for n in all_notes}
 
@@ -133,6 +134,17 @@ class VaultIndex:
             if not self.serve_redacted and find_secrets(note.body):
                 self.redacted_paths.add(note.path)
                 continue  # redaction guard: secret-bearing notes are not served
+            if note.superseded:
+                # Supersession is enforced the same way as entitlements: a
+                # stale note is never inserted, so it cannot be scored, ranked
+                # or cited. Measured before this existed (v0.3 probe): a stale
+                # copy of a policy tied its successor on BM25 score in 7 of 12
+                # queries, tied on coverage in 11 of 12, and won the tie every
+                # time because "-2025.md" sorts before ".md". Both abstention
+                # gates passed it in 12 of 12 — it IS relevant, it is just no
+                # longer true. No ranking rule fixes that; exclusion does.
+                self.superseded[note.path] = note
+                continue
             self.notes[note.path] = note
             tags = " ".join(note.tags)
             for s in note.sections:
@@ -244,9 +256,16 @@ class VaultIndex:
     # -- direct access (same enforcement path) --------------------------------
 
     def get_note(self, note_path: str) -> Note | None:
-        """A note IFF the profile permits it and it passed redaction."""
+        """A note IFF the profile permits it and it passed redaction.
+
+        Superseded notes ARE returned here (with ``note.superseded_by`` set):
+        history stays reachable on purpose, by path, never by search.
+        """
         self.refresh()
-        return self.notes.get(note_path)
+        return self.notes.get(note_path) or self.superseded.get(note_path)
+
+    def is_superseded(self, note_path: str) -> bool:
+        return note_path in self.superseded
 
     def backlinks(self, note_path: str) -> list[str]:
         """Paths of permitted notes whose wikilinks target ``note_path``."""

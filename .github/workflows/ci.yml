@@ -21,5 +21,5 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Unit tests
         run: pytest -q
-      - name: Eval gate (retrieval / abstention / leakage / redaction)
+      - name: Eval gate (answerable / unsupported / superseded / denied / secret, by slice)
         run: python evals/run_evals.py
