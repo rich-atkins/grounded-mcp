@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grounded-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "An evals-first MCP server for markdown knowledge vaults: citations, abstention, entitlements — with the eval suite to prove them."
 readme = "README.md"
 license = { file = "LICENSE" }

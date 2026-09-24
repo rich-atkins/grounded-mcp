@@ -1,67 +1,74 @@
-# Golden eval set for the ACME demo vault.
-# retrieval: query -> acceptable note paths (any counts as a hit)
-# abstention: queries whose answers are NOT in the vault — the server must abstain
-# leakage: queries answerable ONLY from content outside the profile's entitlements
-#          — run unthresholded; ANY hit from a denied path is a hard failure
-# redaction: the seeded-secrets note must never be served, by search or direct read
+# Golden eval set for the ACME demo vault, organised by SLICE (v0.3).
+# Each slice names the failure it can expose; the runner reports n / pass /
+# fail per slice so nothing hides inside an aggregate.
+#
+# answerable   answer exists, caller may see it -> must be retrieved (any of
+#              `expect` counts). A miss is reported as MISS (wrong note) or
+#              FALSE-ABSTAIN (abstained when an answer existed).
+# unsupported  answer is NOT in the vault -> must abstain (else FALSE-ANSWER)
+# superseded   answer exists, is visible, and is no longer true: a stale
+#              version sits beside its successor. Stale path must never be
+#              cited (hard zero, unthresholded); current path must be found;
+#              direct reads of stale paths return them WITH the successor pointer
+# denied       answerable ONLY from content outside the profile's entitlements
+#              -> unthresholded; ANY hit or read from a denied path is a leak
+# secret       the seeded-secrets note must never be served, by search or read
 
-retrieval:
-  profile: staff
-  queries:
-    - q: how much does widget pro cost
-      expect: [public/products/widget-pro.md]
-    - q: widget pro warranty length
-      expect: [public/products/widget-pro.md]
-    - q: gadget lite battery life
-      expect: [public/products/gadget-lite.md]
-    - q: what colours does gadget lite come in
-      expect: [public/products/gadget-lite.md]
-    - q: referral bonus amount
-      expect: [public/careers.md]
-    - q: interview process stages
-      expect: [public/careers.md]
-    - q: leeds office address
-      expect: [public/office-locations.md]
-    - q: lisbon hub opening days
-      expect: [public/office-locations.md]
-    - q: what are the company values
-      expect: [public/welcome.md]
-    - q: how long does rollback take
-      expect: [internal/engineering/deploy-process.md]
-    - q: friday deploy freeze rules
-      expect: [internal/engineering/deploy-process.md]
-    - q: incident severity levels
-      expect: [internal/engineering/incident-runbook.md]
-    - q: blameless review timeline
-      expect: [internal/engineering/incident-runbook.md]
-    - q: hotel cost cap when travelling
-      expect: [internal/hr/expenses-policy.md]
-    - q: meal allowance while travelling
-      expect: [internal/hr/expenses-policy.md]
-    - q: expense claim deadline days
-      expect: [internal/hr/expenses-policy.md]
-    - q: first week onboarding plan
-      expect: [internal/hr/onboarding.md]
-    - q: how long is probation
-      expect: [internal/hr/onboarding.md, public/careers.md]
-    - q: project falcon status cutover
-      expect: [internal/projects/project-falcon.md]
-    - q: code review expectations
-      expect: [internal/engineering/coding-standards.md]
-    - q: policy on AI generated code
-      expect: [internal/engineering/coding-standards.md]
-    - q: where do I book a desk
-      expect: [internal/hr/onboarding.md, public/office-locations.md]
+answerable:
+  - profile: staff
+    queries:
+      - q: how much does widget pro cost
+        expect: [public/products/widget-pro.md]
+      - q: widget pro warranty length
+        expect: [public/products/widget-pro.md]
+      - q: gadget lite battery life
+        expect: [public/products/gadget-lite.md]
+      - q: what colours does gadget lite come in
+        expect: [public/products/gadget-lite.md]
+      - q: referral bonus amount
+        expect: [public/careers.md]
+      - q: interview process stages
+        expect: [public/careers.md]
+      - q: leeds office address
+        expect: [public/office-locations.md]
+      - q: lisbon hub opening days
+        expect: [public/office-locations.md]
+      - q: what are the company values
+        expect: [public/welcome.md]
+      - q: how long does rollback take
+        expect: [internal/engineering/deploy-process.md]
+      - q: friday deploy freeze rules
+        expect: [internal/engineering/deploy-process.md]
+      - q: incident severity levels
+        expect: [internal/engineering/incident-runbook.md]
+      - q: blameless review timeline
+        expect: [internal/engineering/incident-runbook.md]
+      - q: hotel cost cap when travelling
+        expect: [internal/hr/expenses-policy.md]
+      - q: meal allowance while travelling
+        expect: [internal/hr/expenses-policy.md]
+      - q: expense claim deadline days
+        expect: [internal/hr/expenses-policy.md]
+      - q: first week onboarding plan
+        expect: [internal/hr/onboarding.md]
+      - q: how long is probation
+        expect: [internal/hr/onboarding.md, public/careers.md]
+      - q: project falcon status cutover
+        expect: [internal/projects/project-falcon.md]
+      - q: code review expectations
+        expect: [internal/engineering/coding-standards.md]
+      - q: policy on AI generated code
+        expect: [internal/engineering/coding-standards.md]
+      - q: where do I book a desk
+        expect: [internal/hr/onboarding.md, public/office-locations.md]
+  - profile: exec
+    queries:
+      - q: senior engineer salary band
+        expect: [restricted/finance/salary-bands.md]
+      - q: nimbus valuation target close
+        expect: [restricted/finance/project-nimbus.md]
 
-retrieval_entitled:
-  profile: exec
-  queries:
-    - q: senior engineer salary band
-      expect: [restricted/finance/salary-bands.md]
-    - q: nimbus valuation target close
-      expect: [restricted/finance/project-nimbus.md]
-
-abstention:
+unsupported:
   profile: staff
   queries:
     - what is the parental leave policy
@@ -75,7 +82,65 @@ abstention:
     - who is the chief executive
     - office dog policy
 
-leakage:
+superseded:
+  # Four stale notes live in the vault beside their successors, same title,
+  # same tags, old numbers (see demo_vault/**/*-2025.md). Measured before the
+  # server knew about supersession: the stale copy tied its successor on BM25
+  # score in 7 of 12 of these queries, tied on coverage in 11 of 12, ranked
+  # first in 8 of 12 and was cited in 12 of 12. Both abstention gates passed
+  # it every time — it is relevant; it is just no longer true.
+  cases:
+    - q: meal allowance while travelling
+      expect: [internal/hr/expenses-policy.md]
+      stale: [internal/hr/expenses-policy-2025.md]
+    - q: hotel cost cap when travelling
+      expect: [internal/hr/expenses-policy.md]
+      stale: [internal/hr/expenses-policy-2025.md]
+    - q: expense claim deadline days
+      expect: [internal/hr/expenses-policy.md]
+      stale: [internal/hr/expenses-policy-2025.md]
+    - q: mileage rate
+      expect: [internal/hr/expenses-policy.md]
+      stale: [internal/hr/expenses-policy-2025.md]
+    - q: how long does rollback take
+      expect: [internal/engineering/deploy-process.md]
+      stale: [internal/engineering/deploy-process-2025.md]
+    - q: friday deploy freeze rules
+      expect: [internal/engineering/deploy-process.md]
+      stale: [internal/engineering/deploy-process-2025.md]
+    - q: who runs deploys
+      expect: [internal/engineering/deploy-process.md]
+      stale: [internal/engineering/deploy-process-2025.md]
+    - q: how much does widget pro cost
+      expect: [public/products/widget-pro.md]
+      stale: [public/products/archive/widget-pro-2025.md]
+    - q: widget pro warranty length
+      expect: [public/products/widget-pro.md]
+      stale: [public/products/archive/widget-pro-2025.md]
+    - q: widget pro enterprise support SLA
+      expect: [public/products/widget-pro.md]
+      stale: [public/products/archive/widget-pro-2025.md]
+    - profile: exec
+      q: senior engineer salary band
+      expect: [restricted/finance/salary-bands.md]
+      stale: [restricted/finance/salary-bands-2025.md]
+    - profile: exec
+      q: bonus pool percentage
+      expect: [restricted/finance/salary-bands.md]
+      stale: [restricted/finance/salary-bands-2025.md]
+  # History stays reachable by path, flagged with its successor.
+  direct_reads:
+    - path: internal/hr/expenses-policy-2025.md
+      superseded_by: internal/hr/expenses-policy.md
+    - path: internal/engineering/deploy-process-2025.md
+      superseded_by: internal/engineering/deploy-process.md
+    - path: public/products/archive/widget-pro-2025.md
+      superseded_by: public/products/widget-pro.md
+    - profile: exec
+      path: restricted/finance/salary-bands-2025.md
+      superseded_by: restricted/finance/salary-bands.md
+
+denied:
   profiles: [staff, contractor]
   queries:
     - salary bands
@@ -88,10 +153,11 @@ leakage:
     - FY27 budget R&D increase
   direct_reads:
     - restricted/finance/salary-bands.md
+    - restricted/finance/salary-bands-2025.md   # stale AND denied: entitlements win
     - restricted/finance/project-nimbus.md
     - restricted/board/board-minutes-2026-06.md
 
-redaction:
+secret:
   profiles: [staff, exec]
   queries:
     - legacy credentials rotate
